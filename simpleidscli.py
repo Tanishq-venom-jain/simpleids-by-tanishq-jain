@@ -25,29 +25,56 @@ print("""
  \ \   __  \   \ \    / /          \ \  \ \ \   __  \ \  \\ \  \ \  \ \_____  \ \   __  \ \  \\\  \        __ \ \  \ \   __  \ \  \ \  \\ \  \  
   \ \  \|\  \   \/  /  /            \ \  \ \ \  \ \  \ \  \\ \  \ \  \|____|\  \ \  \ \  \ \  \\\  \      |\  \\_\  \ \  \ \  \ \  \ \  \\ \  \ 
    \ \_______\__/  / /               \ \__\ \ \__\ \__\ \__\\ \__\ \__\____\_\  \ \__\ \__\ \_____  \     \ \________\ \__\ \__\ \__\ \__\\ \__\
-    \|_______|\___/ /                 \|__|  \|__|\|__|\|__| \|__|\|__|\_________\|__|\|__|\|___| \__\     \|________|\|__|\|__|\|__|\|__| \|__|
-             \|___/ /                                                  \|_________|               \|__|                                          
-                 \|__|                                                                                                                                
-                
+    \|_______|\___/ /                 \|__|  \|__|\|__|\|__| \|__|\|__|\_________\|__|\|__|\|___| \__\     \|________|\|__|\|__\|__|\|__| \|__|
+             \|___/                                                  \|_________|               \|__|                                          
+                                                                                                                                                
+                                                                                                                                                
 Simple IDS by Tanishq Jain
 """)
 
+def update_config_with_api_keys():
+    # Update NVD API credentials
+    config['DEFAULT']['NvdApiKey'] = input("Enter your NVD API key: ")
+
+    # Update GitHub API credentials
+    config['DEFAULT']['GitHubApiToken'] = input("Enter your GitHub API token: ")
+
+    with open('config.ini', 'w') as config_file:
+        config.write(config_file)
+
+def read_config():
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    return config
+
+def load_credentials():
+    config = read_config()
+
+    sniffing_filter = config['DEFAULT']['SniffingFilter']
+    blocked_ips_file_path = config['DEFAULT']['BlockedIPsFilePath']
+
+    # Set up logging
+    logging.basicConfig(filename='syn_flood.log', level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+
+    # Email credentials
+    email_sender = config['DEFAULT']['EmailSender']
+    email_password = config['DEFAULT']['EmailPassword']
+
+    # Telegram credentials
+    telegram_bot_token = config['DEFAULT']['TelegramBotToken']
+    telegram_chat_id = config['DEFAULT']['TelegramChatID']
+
+    # NVD API credentials
+    nvd_api_key = config['DEFAULT']['NvdApiKey']
+
+    # GitHub API credentials
+    github_api_token = config['DEFAULT']['GitHubApiToken']
+
+    return sniffing_filter, blocked_ips_file_path, email_sender, email_password, telegram_bot_token, telegram_chat_id, nvd_api_key, github_api_token
+
 # Load configuration
-config = configparser.ConfigParser()
-config.read('config.ini')
-sniffing_filter = config['DEFAULT']['SniffingFilter']
-blocked_ips_file_path = config['DEFAULT']['BlockedIPsFilePath']
-
-# Set up logging
-logging.basicConfig(filename='syn_flood.log', level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
-
-# Fill in your email credentials
-email_sender = 'your_email@gmail.com'
-email_password = 'your_email_password'  # Replace with your actual email password
-
-# Fill in your Telegram credentials
-telegram_bot_token = 'YOUR_TELEGRAM_BOT_TOKEN'
-telegram_chat_id = 'YOUR_CHAT_ID'
+config = read_config()
+sniffing_filter, blocked_ips_file_path, email_sender, email_password, telegram_bot_token, telegram_chat_id, nvd_api_key, github_api_token = load_credentials()
 
 blocked_ips = set()  # Set to keep track of blocked IPs
 syn_count = defaultdict(int)  # Dictionary to keep track of SYN packets
@@ -77,122 +104,89 @@ def send_telegram_alert(src_ip, attack_type):
     if response.status_code != 200:
         logging.error(f'Failed to send Telegram alert: {response.content}')
 
-slowloris_connections = defaultdict(int)  # Dictionary to keep track of Slowloris connections
-arp_cache = {}  # Dictionary to keep track of ARP cache
-dns_queries = defaultdict(set)  # Dictionary to keep track of DNS queries
-
-# Function to detect Slowloris attack
-def detect_slowloris(packet):
-    if packet.haslayer(TCP) and packet[TCP].flags == 2:  # TCP packet with SYN flag
-        src_ip = packet[IP].src
-        if src_ip in slowloris_connections:
-            slowloris_connections[src_ip] += 1
-            if slowloris_connections[src_ip] > SLOWLORIS_THRESHOLD:
-                logging.info(f"Slowloris attack detected from {src_ip}! Blocking IP...")
-                block_ip(src_ip)
-                print(f"Slowloris attack detected from {src_ip}! Blocking IP...")
-                send_alert(src_ip, 'Slowloris')
-                send_telegram_alert(src_ip, 'Slowloris')
-                slowloris_connections.pop(src_ip)  # Reset the counter after blocking
-
-# Function to detect SYN/ACK attack (DoS)
-def detect_syn_ack_attack(packet):
-    if packet.haslayer(TCP) and packet[TCP].flags == 18:  # TCP packet with SYN/ACK flags set
-        src_ip = packet[IP].src
-        if src_ip not in blocked_ips:
-            logging.info(f"SYN/ACK attack detected from {src_ip}! Blocking IP...")
-            block_ip(src_ip)
-            print(f"SYN/ACK attack detected from {src_ip}! Blocking IP...")
-            send_alert(src_ip, 'SYN/ACK')
-            send_telegram_alert(src_ip, 'SYN/ACK')
-
-# Function to detect UDP flood (DoS)
-def detect_udp_flood(packet):
-    if packet.haslayer(UDP):
-        src_ip = packet[IP].src
-        if src_ip not in blocked_ips:
-            logging.info(f"UDP flood attack detected from {src_ip}! Blocking IP...")
-            block_ip(src_ip)
-            print(f"UDP flood attack detected from {src_ip}! Blocking IP...")
-            send_alert(src_ip, 'UDP Flood')
-            send_telegram_alert(src_ip, 'UDP Flood')
-
-# Function to detect ARP Spoofing (MitM)
-def detect_arp_spoofing(packet):
-    if packet.haslayer(ARP):
-        src_mac = packet[ARP].hwsrc
-        src_ip = packet[ARP].psrc
-        if src_ip not in arp_cache:
-            arp_cache[src_ip] = src_mac
-        elif arp_cache[src_ip] != src_mac:
-            logging.info(f"ARP Spoofing attack detected from {src_ip}! Blocking IP...")
-            block_ip(src_ip)
-            print(f"ARP Spoofing attack detected from {src_ip}! Blocking IP...")
-            send_alert(src_ip, 'ARP Spoofing')
-            send_telegram_alert(src_ip, 'ARP Spoofing')
-
-# Function to detect DNS Spoofing (MitM)
-def detect_dns_spoofing(packet):
-    if packet.haslayer(DNSQR):
-        src_ip = packet[IP].src
-        query = packet[DNSQR].qname.decode('utf-8')
-        if src_ip not in dns_queries:
-            dns_queries[src_ip] = set()
-        if query not in dns_queries[src_ip]:
-            dns_queries[src_ip].add(query)
-        else:
-            logging.info(f"DNS Spoofing attack detected from {src_ip}! Blocking IP...")
-            block_ip(src_ip)
-            print(f"DNS Spoofing attack detected from {src_ip}! Blocking IP...")
-            send_alert(src_ip, 'DNS Spoofing')
-            send_telegram_alert(src_ip, 'DNS Spoofing')
-
-# Function to display packet information
-def display_packet_info(packet):
-    if IP in packet:
-        src_ip = packet[IP].src
-        dst_ip = packet[IP].dst
-        if TCP in packet:
-            src_port = packet[TCP].sport
-            dst_port = packet[TCP].dport
-            print(f"Incoming TCP packet: {src_ip}:{src_port} -> {dst_ip}:{dst_port}")
-        elif UDP in packet:
-            src_port = packet[UDP].sport
-            dst_port = packet[UDP].dport
-            print(f"Incoming UDP packet: {src_ip}:{src_port} -> {dst_ip}:{dst_port}")
-        elif ICMP in packet:
-            print(f"Incoming ICMP packet: {src_ip} -> {dst_ip}")
-    elif ARP in packet:
-        src_ip = packet[ARP].psrc
-        dst_ip = packet[ARP].pdst
-        print(f"Incoming ARP packet: {src_ip} -> {dst_ip}")
+# Function to block an IP address
+def block_ip(ip):
+    blocked_ips.add(ip)
+    logging.info(f'Blocked IP: {ip}')
 
 # Function to unblock an IP address
-def unblock_ip(selected_ip):
-    if selected_ip in blocked_ips:
-        logging.info(f"Unblocking IP: {selected_ip}")
-        os.system(f"iptables -D INPUT -s {selected_ip} -j DROP")  # Unblock IP
-        print(f"Unblocked IP: {selected_ip}")
-        update_blocked_ips_file()
-        blocked_ips.remove(selected_ip)  # Remove the IP from the set of blocked IPs
+def unblock_ip(ip):
+    if ip in blocked_ips:
+        blocked_ips.remove(ip)
+        logging.info(f'Unblocked IP: {ip}')
+    else:
+        logging.warning(f'IP not found in the blocked list: {ip}')
 
-# Function to block an IP address
-def block_ip(ip_address):
-    subprocess.Popen(['iptables', '-A', 'INPUT', '-s', ip_address, '-j', 'DROP'])  # Non-blocking execution
+# Function to detect Slowloris attack
+def detect_slowloris(pkt):
+    if IP in pkt and TCP in pkt:
+        src_ip = pkt[IP].src
+        src_port = pkt[TCP].sport
+        if src_ip not in blocked_ips and pkt[TCP].flags == 2:
+            syn_count[src_ip] += 1
+            if syn_count[src_ip] > SLOWLORIS_THRESHOLD:
+                send_alert(src_ip, 'Slowloris')
+                send_telegram_alert(src_ip, 'Slowloris')
+                block_ip(src_ip)
+                time.sleep(BLOCK_DURATION)
+                unblock_ip(src_ip)
+                syn_count[src_ip] = 0
 
-    # Add IP to set of blocked IPs
-    blocked_ips.add(ip_address)
-    update_blocked_ips_file()
+# Function to detect SYN/ACK attack
+def detect_syn_ack_attack(pkt):
+    if IP in pkt and TCP in pkt:
+        src_ip = pkt[IP].src
+        src_port = pkt[TCP].sport
+        if src_ip not in blocked_ips and pkt[TCP].flags == 18:
+            syn_count[src_ip] += 1
+            if syn_count[src_ip] > THRESHOLD:
+                send_alert(src_ip, 'SYN/ACK Flood')
+                send_telegram_alert(src_ip, 'SYN/ACK Flood')
+                block_ip(src_ip)
+                time.sleep(BLOCK_DURATION)
+                unblock_ip(src_ip)
+                syn_count[src_ip] = 0
 
-    # Write the IP address to the file
-    with open(blocked_ips_file_path, "a") as file:
-        file.write(f"{ip_address}\n")
+# Function to detect UDP flood
+def detect_udp_flood(pkt):
+    if IP in pkt and UDP in pkt:
+        src_ip = pkt[IP].src
+        src_port = pkt[UDP].sport
+        traffic[src_ip] += 1
+        if src_ip not in blocked_ips and traffic[src_ip] > THRESHOLD:
+            send_alert(src_ip, 'UDP Flood')
+            send_telegram_alert(src_ip, 'UDP Flood')
+            block_ip(src_ip)
+            time.sleep(BLOCK_DURATION)
+            unblock_ip(src_ip)
+            traffic[src_ip] = 0
 
-# Function to update the blocked IPs file
-def update_blocked_ips_file():
-    with open(blocked_ips_file_path, "w") as file:  # Open the file in write mode
-        for ip in blocked_ips:
-            file.write(f"{ip}\n")  # Write the remaining IP addresses to the file
+# Function to display packet information
+def display_packet_info(pkt):
+    if IP in pkt:
+        print(f"Packet from {pkt[IP].src} to {pkt[IP].dst}")
+
+# Function to detect ARP spoofing
+def detect_arp_spoofing(pkt):
+    if ARP in pkt and pkt[ARP].op == 2:
+        src_ip = pkt[ARP].psrc
+        src_mac = pkt[ARP].hwsrc
+        if src_ip != pkt[ARP].pdst:
+            logging.warning(f"Possible ARP spoofing: IP {src_ip} with MAC {src_mac} is claiming {pkt[ARP].pdst}'s IP")
+
+# Function to detect DNS spoofing
+def detect_dns_spoofing(pkt):
+    if IP in pkt and UDP in pkt and DNSQR in pkt:
+        src_ip = pkt[IP].src
+        src_port = pkt[UDP].sport
+        qname = pkt[DNSQR].qname.decode('utf-8')
+        if src_ip not in blocked_ips and qname not in legitimate_dns_queries:
+            send_alert(src_ip, 'DNS Spoofing')
+            send_telegram_alert(src_ip, 'DNS Spoofing')
+            block_ip(src_ip)
+            time.sleep(BLOCK_DURATION)
+            unblock_ip(src_ip)
+            legitimate_dns_queries.add(qname)
 
 # Function to start sniffing
 def start_sniffing(background=False):
@@ -208,7 +202,6 @@ def start_sniffing(background=False):
                 sniff(filter=sniffing_filter, prn=display_packet_info, store=0)
     except KeyboardInterrupt:
         print("Exiting the IDS.")
-        sys.exit(0)  # Exit gracefully
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Network IDS for SYN Flood, Slowloris, and more.')
