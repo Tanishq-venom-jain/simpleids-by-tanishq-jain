@@ -184,7 +184,7 @@ def update_blocked_ips_file():
             file.write(f"{ip}\n")  # Write the remaining IP addresses to the file
 
 # Function to start sniffing
-def start_sniffing():
+def start_sniffing(background=False):
     try:
         print("Starting the IDS. Press Ctrl+C to exit.")
         while True:
@@ -193,7 +193,8 @@ def start_sniffing():
             sniff(filter=sniffing_filter, prn=detect_udp_flood, timeout=1)
             sniff(filter="arp", prn=detect_arp_spoofing, timeout=1)
             sniff(filter="udp and port 53", prn=detect_dns_spoofing, timeout=1)
-            sniff(filter=sniffing_filter, prn=display_packet_info, store=0)
+            if not background:
+                sniff(filter=sniffing_filter, prn=display_packet_info, store=0)
     except KeyboardInterrupt:
         print("Exiting the IDS.")
 
@@ -201,6 +202,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Network IDS for SYN Flood, Slowloris, and more.')
     parser.add_argument('--start', action='store_true', help='Start the network IDS')
     parser.add_argument('--unblock', type=str, metavar='IP', help='Unblock the specified IP address')
+    parser.add_argument('--background', action='store_true', help='Run the IDS in the background (suppress packet display)')
     parser.add_argument('--helpme', action='help', help='Show this help message and exit')
     return parser.parse_args()
 
@@ -209,7 +211,7 @@ def main():
     args = parse_args()
 
     if args.start:
-        start_sniffing()
+        start_sniffing(background=args.background)
     elif args.unblock:
         unblock_ip(args.unblock)
 
