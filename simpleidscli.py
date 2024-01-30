@@ -10,6 +10,17 @@ import time
 import argparse
 import subprocess  # Import subprocess module for non-blocking execution
 
+# Banner for Simple IDS by Tanishq Jain
+print("""
+     ____  _     _ _ _ _____ _      
+    |  _ \| |__ (_) | |_   _| |     
+    | | | | '_ \| | | | | | | |     
+    | |_| | | | | | | | | | | |     
+    |____/|_| |_|_|_| |_| |_|     
+                                  
+Simple IDS by Tanishq Jain
+""")
+
 # Load configuration
 config = configparser.ConfigParser()
 config.read('config.ini')
