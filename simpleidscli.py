@@ -83,6 +83,17 @@ THRESHOLD = 100  # Threshold for SYN packets
 BLOCK_DURATION = 300  # Block duration in seconds for Slowloris attack
 SLOWLORIS_THRESHOLD = 20  # Threshold for Slowloris attack
 
+# Web Data Retriever
+def retrieve_nvd_data(api_key):
+    # Implement your NVD data retrieval logic
+    # This is just a placeholder, replace it with the actual logic
+    return [{'source_ip': 'malicious_ip_1', 'description': 'Malicious activity'}, {'source_ip': 'malicious_ip_2', 'description': 'Another malicious activity'}]
+
+def retrieve_github_data(api_token, username, repository):
+    # Implement your GitHub data retrieval logic
+    # This is just a placeholder, replace it with the actual logic
+    return [{'user': {'ip': 'malicious_ip_3'}, 'title': 'Malicious issue'}, {'user': {'ip': 'malicious_ip_4'}, 'title': 'Another malicious issue'}]
+
 # Function to send an email alert
 def send_alert(src_ip, attack_type):
     msg = MIMEText(f"Attack detected from {src_ip}! Type: {attack_type}")
@@ -104,10 +115,11 @@ def send_telegram_alert(src_ip, attack_type):
     if response.status_code != 200:
         logging.error(f'Failed to send Telegram alert: {response.content}')
 
-# Function to block an IP address
-def block_ip(ip):
+# Function to block an IP address based on malicious intent
+def block_malicious_ip(ip):
+    # Add your logic to block the malicious IP address
     blocked_ips.add(ip)
-    logging.info(f'Blocked IP: {ip}')
+    logging.info(f'Blocked malicious IP: {ip}')
 
 # Function to unblock an IP address
 def unblock_ip(ip):
@@ -128,6 +140,7 @@ def detect_slowloris(pkt):
                 send_alert(src_ip, 'Slowloris')
                 send_telegram_alert(src_ip, 'Slowloris')
                 block_ip(src_ip)
+                block_malicious_ip(src_ip)  # Block based on malicious intent
                 time.sleep(BLOCK_DURATION)
                 unblock_ip(src_ip)
                 syn_count[src_ip] = 0
@@ -143,6 +156,7 @@ def detect_syn_ack_attack(pkt):
                 send_alert(src_ip, 'SYN/ACK Flood')
                 send_telegram_alert(src_ip, 'SYN/ACK Flood')
                 block_ip(src_ip)
+                block_malicious_ip(src_ip)  # Block based on malicious intent
                 time.sleep(BLOCK_DURATION)
                 unblock_ip(src_ip)
                 syn_count[src_ip] = 0
@@ -157,6 +171,7 @@ def detect_udp_flood(pkt):
             send_alert(src_ip, 'UDP Flood')
             send_telegram_alert(src_ip, 'UDP Flood')
             block_ip(src_ip)
+            block_malicious_ip(src_ip)  # Block based on malicious intent
             time.sleep(BLOCK_DURATION)
             unblock_ip(src_ip)
             traffic[src_ip] = 0
@@ -184,6 +199,7 @@ def detect_dns_spoofing(pkt):
             send_alert(src_ip, 'DNS Spoofing')
             send_telegram_alert(src_ip, 'DNS Spoofing')
             block_ip(src_ip)
+            block_malicious_ip(src_ip)  # Block based on malicious intent
             time.sleep(BLOCK_DURATION)
             unblock_ip(src_ip)
             legitimate_dns_queries.add(qname)
