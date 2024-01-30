@@ -8,7 +8,7 @@ import requests
 from collections import defaultdict
 import time
 import argparse
-import subprocess  # Import subprocess module for non-blocking execution
+import subprocess
 
 # Banner for Simple IDS by Tanishq Jain
 print("""
@@ -26,9 +26,9 @@ print("""
   \ \  \|\  \   \/  /  /            \ \  \ \ \  \ \  \ \  \\ \  \ \  \|____|\  \ \  \ \  \ \  \\\  \      |\  \\_\  \ \  \ \  \ \  \ \  \\ \  \ 
    \ \_______\__/  / /               \ \__\ \ \__\ \__\ \__\\ \__\ \__\____\_\  \ \__\ \__\ \_____  \     \ \________\ \__\ \__\ \__\ \__\\ \__\
     \|_______|\___/ /                 \|__|  \|__|\|__|\|__| \|__|\|__|\_________\|__|\|__|\|___| \__\     \|________|\|__|\|__|\|__|\|__| \|__|
-             \|___|/                                                  \|_________|               \|__|                                          
-                                                                                                                                                
-                                                                                                                                                
+             \|___/ /                                                  \|_________|               \|__|                                          
+                 \|__|                                                                                                                                
+                
 Simple IDS by Tanishq Jain
 """)
 
@@ -208,6 +208,7 @@ def start_sniffing(background=False):
                 sniff(filter=sniffing_filter, prn=display_packet_info, store=0)
     except KeyboardInterrupt:
         print("Exiting the IDS.")
+        sys.exit(0)  # Exit gracefully
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Network IDS for SYN Flood, Slowloris, and more.')
